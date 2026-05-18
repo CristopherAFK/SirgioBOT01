@@ -8,7 +8,7 @@ function buildWelcomeEmbed(member) {
     .setTitle(`🏴‍☠️ ¡Bienvenido/a, ${member.user.username}!`)
     .setDescription(
       [
-        `Hola ${member}, nos alegra tenerte en el servidor de **Sirgio**.`,
+        `Hola ${member}, nos alegra tenerte en **El Reino del Lag**.`,
         '',
         `📜 Lee las reglas en <#${config.rulesChannelId}>`,
         `🎭 Obtén tus autoroles en <#${config.autorolesChannelId}>`,
