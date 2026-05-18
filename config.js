@@ -1,10 +1,12 @@
 module.exports = {
   token: process.env.DISCORD_TOKEN,
+  mongoUri: process.env.MONGODB_URI,
   guildId: '1212886282645147768',
   ownerId: '1476286247415578758',
   ticketCategoryId: '1228437209628020736',
   staffRoleId: '1229140504310972599',
   reviewsChannelId: '1506013832319860808',
+  suggestionsChannelId: '1440873532580954112',
   logoUrl:
     'https://media.discordapp.net/attachments/1420914042251509990/1430698897927307347/79794618.png?ex=6a0c48ee&is=6a0af76e&hm=25c56c52665a6ad5cc0b0ced53d3b636cd2cbb5aefdbe36ad34e386a3e1a89c4&=&format=webp&quality=lossless',
   colors: {
@@ -15,6 +17,10 @@ module.exports = {
     review: 0xeb459e,
     close: 0xed4245,
     rating: 0x5865f2,
+    suggestion: 0x5865f2,
+    suggestionApproved: 0x57f287,
+    suggestionRejected: 0xed4245,
+    suggestionPending: 0xfaa61a,
   },
   categories: [
     { value: 'comandos_bots', label: 'Comandos y bots', emoji: '🤖' },

@@ -1,5 +1,4 @@
-const fs = require('fs');
-const path = require('path');
+const http = require('http');
 const {
   Client,
   GatewayIntentBits,
@@ -14,10 +13,14 @@ const {
   TextInputStyle,
   ChannelType,
   PermissionFlagsBits,
+  REST,
+  Routes,
+  SlashCommandBuilder,
+  AttachmentBuilder,
 } = require('discord.js');
 const config = require('./config');
-
-const DATA_FILE = path.join(__dirname, 'tickets.json');
+const db = require('./database');
+const suggestions = require('./suggestions');
 
 const client = new Client({
   intents: [
@@ -32,27 +35,6 @@ const client = new Client({
 
 const pendingTickets = new Map();
 
-function loadData() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-    }
-  } catch {
-    /* ignore */
-  }
-  return { counter: 0, channels: {} };
-}
-
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-}
-
-function getNextTicketNumber() {
-  const data = loadData();
-  data.counter += 1;
-  saveData(data);
-  return String(data.counter).padStart(3, '0');
-}
 
 function getCategoryLabel(value) {
   const cat = config.categories.find((c) => c.value === value);
@@ -202,30 +184,73 @@ function buildRatingEmbed(ticketNumber, categoryLabel) {
     .setTitle('⭐ Valora tu experiencia')
     .setDescription(
       `Tu ticket **#${ticketNumber}** (${categoryLabel}) ha sido cerrado.\n\n` +
-        '¿Cómo calificarías la atención del staff? Elige una puntuación del 1 al 5.\n' +
+        '¿Cómo calificarías la atención del staff? Elige una cantidad de estrellas.\n' +
         'Después podrás dejar una opinión opcional.',
     )
     .setThumbnail(config.logoUrl);
 }
 
 function buildRatingRow(reviewId) {
-  const emojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'];
   const row = new ActionRowBuilder();
   for (let i = 1; i <= 5; i++) {
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(`ticket_rate#${reviewId}#${i}`)
-        .setLabel(String(i))
-        .setStyle(ButtonStyle.Secondary)
-        .setEmoji(emojis[i - 1]),
+        .setLabel('⭐'.repeat(i))
+        .setStyle(ButtonStyle.Secondary),
     );
   }
   return row;
 }
 
+async function buildTranscript(channel, ticket) {
+  const allMessages = [];
+  let lastId;
+
+  while (true) {
+    const options = { limit: 100 };
+    if (lastId) options.before = lastId;
+    const batch = await channel.messages.fetch(options);
+    if (batch.size === 0) break;
+    allMessages.push(...batch.values());
+    lastId = batch.last().id;
+    if (batch.size < 100) break;
+  }
+
+  allMessages.sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+
+  const lines = [
+    '═══════════════════════════════════════',
+    '       TRANSCRIPCIÓN DE TICKET — SIRGIO',
+    '═══════════════════════════════════════',
+    `Ticket: #${ticket.number}`,
+    `Categoría: ${ticket.category}`,
+    `Usuario: ${ticket.userId}`,
+    `Canal: ${channel.name} (${channel.id})`,
+    `Generado: ${new Date().toLocaleString('es-ES', { timeZone: 'America/Mexico_City' })}`,
+    '═══════════════════════════════════════',
+    '',
+  ];
+
+  for (const msg of allMessages) {
+    const date = msg.createdAt.toLocaleString('es-ES', { timeZone: 'America/Mexico_City' });
+    const author = msg.author?.bot ? `[BOT] ${msg.author.tag}` : msg.author?.tag || 'Desconocido';
+    let body = msg.content || '';
+    if (msg.embeds.length) body += body ? ' ' : '' + `[Embed: ${msg.embeds[0].title || 'sin título'}]`;
+    if (msg.attachments.size) {
+      body += (body ? ' ' : '') + `[Adjuntos: ${[...msg.attachments.values()].map((a) => a.url).join(', ')}]`;
+    }
+    if (!body) body = '[sin contenido de texto]';
+    lines.push(`[${date}] ${author}: ${body}`);
+  }
+
+  lines.push('', '═══════════════════════════════════════', '              FIN DE TRANSCRIPCIÓN', '═══════════════════════════════════════');
+  return lines.join('\n');
+}
+
 async function createTicketChannel(guild, member, categoryValue) {
   const categoryLabel = getCategoryLabel(categoryValue);
-  const ticketNumber = getNextTicketNumber();
+  const ticketNumber = await db.getNextTicketNumber();
   const channelName = `ticket-${ticketNumber}-${member.user.username}`
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '')
@@ -258,15 +283,13 @@ async function createTicketChannel(guild, member, categoryValue) {
     ],
   });
 
-  const data = loadData();
-  data.channels[channel.id] = {
+  await db.saveTicket(channel.id, {
     userId: member.id,
     category: categoryLabel,
     categoryValue,
     number: ticketNumber,
     openedAt: Date.now(),
-  };
-  saveData(data);
+  });
 
   await channel.send({
     content: `${member}`,
@@ -278,8 +301,7 @@ async function createTicketChannel(guild, member, categoryValue) {
 }
 
 async function closeTicket(channel, closedBy) {
-  const data = loadData();
-  const ticket = data.channels[channel.id];
+  const ticket = await db.getTicketByChannel(channel.id);
   if (!ticket) {
     return { ok: false, reason: 'Este canal no está registrado como ticket activo.' };
   }
@@ -289,18 +311,28 @@ async function closeTicket(channel, closedBy) {
   const categoryLabel = ticket.category;
   const ticketNumber = ticket.number;
 
+  let transcript = '';
+  try {
+    transcript = await buildTranscript(channel, ticket);
+  } catch (err) {
+    console.error('Error generando transcripción:', err);
+    transcript = 'No se pudo generar la transcripción.';
+  }
+
   const reviewId = `${channel.id}_${Date.now()}`;
-  if (!data.pendingReviews) data.pendingReviews = {};
-  data.pendingReviews[reviewId] = {
+  await db.savePendingReview(reviewId, {
     userId: ticket.userId,
     category: categoryLabel,
     ticketNumber,
+    channelId: channel.id,
+    channelName: channel.name,
     closedBy: closedBy.id,
     closedByTag: closedBy.user.tag,
     closedAt: Date.now(),
-  };
-  delete data.channels[channel.id];
-  saveData(data);
+    transcript,
+    submitted: false,
+  });
+  await db.deleteTicket(channel.id);
 
   if (user) {
     try {
@@ -330,8 +362,45 @@ async function closeTicket(channel, closedBy) {
   return { ok: true, ticketNumber, categoryLabel };
 }
 
-client.once('ready', () => {
+async function registerSlashCommands() {
+  const commands = [
+    new SlashCommandBuilder()
+      .setName('sugerir')
+      .setDescription('Envía una sugerencia para mejorar el servidor')
+      .toJSON(),
+  ];
+
+  const rest = new REST({ version: '10' }).setToken(config.token);
+  await rest.put(Routes.applicationGuildCommands(client.user.id, config.guildId), {
+    body: commands,
+  });
+  console.log('✅ Comandos slash registrados');
+}
+
+function startHealthServer() {
+  const port = Number(process.env.PORT) || 3000;
+  const server = http.createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/') {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('SirgioBOT online');
+      return;
+    }
+    res.writeHead(404);
+    res.end();
+  });
+
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`🌐 Health check activo en puerto ${port}`);
+  });
+}
+
+client.once('ready', async () => {
   console.log(`✅ SirgioBOT conectado como ${client.user.tag}`);
+  try {
+    await registerSlashCommands();
+  } catch (err) {
+    console.error('Error registrando comandos:', err);
+  }
 });
 
 client.on('messageCreate', async (message) => {
@@ -360,8 +429,8 @@ client.on('messageCreate', async (message) => {
       });
     }
 
-    const data = loadData();
-    if (!data.channels[message.channel.id]) {
+    const ticket = await db.getTicketByChannel(message.channel.id);
+    if (!ticket) {
       return message.reply({
         content: '❌ Este canal no es un ticket activo.',
       });
@@ -377,11 +446,20 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
   try {
+    if (interaction.isChatInputCommand()) {
+      const handled = await suggestions.handleSlash(interaction);
+      if (handled !== false) return;
+    }
+
     if (interaction.isButton()) {
+      const sugHandled = await suggestions.handleButton(interaction);
+      if (sugHandled !== false) return;
       await handleButton(interaction);
     } else if (interaction.isStringSelectMenu()) {
       await handleSelect(interaction);
     } else if (interaction.isModalSubmit()) {
+      const sugHandled = await suggestions.handleModal(interaction);
+      if (sugHandled) return;
       await handleModal(interaction);
     }
   } catch (err) {
@@ -429,8 +507,7 @@ async function handleButton(interaction) {
     const categoryValue = customId.replace('ticket_confirm_', '');
     const categoryLabel = getCategoryLabel(categoryValue);
 
-    const data = loadData();
-    const hasOpen = Object.values(data.channels).some((t) => t.userId === interaction.user.id);
+    const hasOpen = await db.userHasOpenTicket(interaction.user.id);
     if (hasOpen) {
       return interaction.reply({
         content: '⚠️ Ya tienes un ticket abierto. Ciérralo antes de abrir otro.',
@@ -463,8 +540,7 @@ async function handleButton(interaction) {
       });
     }
 
-    const data = loadData();
-    const ticket = data.channels[interaction.channel.id];
+    const ticket = await db.getTicketByChannel(interaction.channel.id);
     if (!ticket) {
       return interaction.reply({
         content: '❌ Este canal no es un ticket válido.',
@@ -483,7 +559,6 @@ async function handleButton(interaction) {
       .setTimestamp();
 
     await interaction.reply({ embeds: [attendEmbed] });
-
     await interaction.message.edit({ components: [buildAttendRow()] }).catch(() => {});
     return;
   }
@@ -493,8 +568,7 @@ async function handleButton(interaction) {
     const reviewId = rateMatch[1];
     const rating = parseInt(rateMatch[2], 10);
 
-    const data = loadData();
-    const review = data.pendingReviews?.[reviewId];
+    const review = await db.getPendingReview(reviewId);
     if (!review || review.submitted) {
       return interaction.reply({
         content: '❌ Esta valoración ya no está disponible o expiró.',
@@ -509,9 +583,7 @@ async function handleButton(interaction) {
       });
     }
 
-    review.rating = rating;
-    data.pendingReviews[reviewId] = review;
-    saveData(data);
+    await db.updatePendingReview(reviewId, { rating });
 
     const modal = new ModalBuilder()
       .setCustomId(`ticket_opinion#${reviewId}`)
@@ -552,8 +624,7 @@ async function handleModal(interaction) {
   if (!interaction.customId.startsWith('ticket_opinion#')) return;
 
   const reviewId = interaction.customId.replace('ticket_opinion#', '');
-  const data = loadData();
-  const review = data.pendingReviews?.[reviewId];
+  const review = await db.getPendingReview(reviewId);
 
   if (!review || review.submitted) {
     return interaction.reply({
@@ -571,7 +642,7 @@ async function handleModal(interaction) {
 
   if (!review.rating) {
     return interaction.reply({
-      content: '❌ Primero debes elegir una puntuación del 1 al 5.',
+      content: '❌ Primero debes elegir una puntuación.',
       ephemeral: true,
     });
   }
@@ -581,8 +652,7 @@ async function handleModal(interaction) {
   review.submitted = true;
 
   await sendReviewToChannel(review, reviewId);
-  delete data.pendingReviews[reviewId];
-  saveData(data);
+  await db.deletePendingReview(reviewId);
 
   await interaction.reply({
     content: '✅ ¡Gracias por tu valoración y comentario!',
@@ -591,7 +661,7 @@ async function handleModal(interaction) {
 
   try {
     const dmChannel = interaction.channel;
-    const messages = await dmChannel.messages.fetch({ limit: 5 });
+    const messages = await dmChannel.messages.fetch({ limit: 10 });
     const ratingMsg = messages.find((m) =>
       m.components.some((r) =>
         r.components.some((c) => c.customId?.startsWith('ticket_rate#')),
@@ -651,12 +721,47 @@ async function sendReviewToChannel(review, reviewId) {
     .setFooter({ text: `ID: ${reviewId}` })
     .setThumbnail(config.logoUrl);
 
-  await reviewsChannel.send({ embeds: [embed] });
+  const files = [];
+  if (review.transcript) {
+    const buffer = Buffer.from(review.transcript, 'utf8');
+    files.push(
+      new AttachmentBuilder(buffer, {
+        name: `transcript-ticket-${review.ticketNumber}.txt`,
+        description: 'Transcripción completa del ticket',
+      }),
+    );
+  }
+
+  await reviewsChannel.send({
+    embeds: [embed],
+    files: files.length ? files : undefined,
+    content: files.length ? '📄 **Transcripción del ticket adjunta.**' : undefined,
+  });
 }
 
-if (!config.token) {
-  console.error('❌ Falta la variable de entorno DISCORD_TOKEN en Render.');
+async function main() {
+  if (!config.token) {
+    console.error('❌ Falta la variable de entorno DISCORD_TOKEN.');
+    process.exit(1);
+  }
+  if (!config.mongoUri) {
+    console.error('❌ Falta la variable de entorno MONGODB_URI.');
+    process.exit(1);
+  }
+
+  startHealthServer();
+
+  try {
+    await db.connectDB();
+  } catch (err) {
+    console.error('❌ No se pudo conectar a MongoDB:', err.message);
+    process.exit(1);
+  }
+
+  await client.login(config.token);
+}
+
+main().catch((err) => {
+  console.error('Error fatal al iniciar:', err);
   process.exit(1);
-}
-
-client.login(config.token);
+});
