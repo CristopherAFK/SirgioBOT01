@@ -12,6 +12,23 @@ module.exports = {
   welcomeChannelId: '1212999950275837972',
   rulesChannelId: '1212998742505037864',
   autorolesChannelId: '1422713049957273621',
+  youtube: {
+    notifyChannelId: '1228731751006736426',
+    notifyRoleId: '1505048171095523469',
+    pollIntervalMs: 20000,
+    channels: [
+      {
+        key: 'sirgio_o',
+        channelId: 'UCHiCSO5ETUYchA5mBahcjmg',
+        name: 'Sirgio_o',
+      },
+      {
+        key: 'sirgiotv',
+        channelId: 'UCr9-_GiZhW7w_Xq5Wqw5Npw',
+        name: 'SirgioTV',
+      },
+    ],
+  },
   welcomeImageUrl:
     'https://images-ext-1.discordapp.net/external/kGlOY2oGWM29Ofv9gWe8OaeOAvLoD8RIrT1RtOmEfHc/%3Fformat%3Dwebp%26width%3D800%26height%3D834/https/images-ext-1.discordapp.net/external/gA9Y8BTjysXecAKEi8pwfnh7inNh6kawKGVhZQnlwDM/https/cdn.nekotina.com/guilds/1212886282645147768/23ff9a0e-6163-4852-abcb-54a938a41121.jpg?format=webp&width=545&height=569',
   audit: {

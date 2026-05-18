@@ -83,6 +83,14 @@ const ModCase = mongoose.model(
   }),
 );
 
+const YoutubeState = mongoose.model(
+  'YoutubeState',
+  new mongoose.Schema({
+    channelKey: { type: String, required: true, unique: true },
+    lastVideoId: String,
+  }),
+);
+
 const AutorolePanel = mongoose.model(
   'AutorolePanel',
   new mongoose.Schema({
@@ -297,6 +305,18 @@ async function deleteAutorolePanelsByChannel(channelId) {
   await AutorolePanel.deleteMany({ channelId });
 }
 
+async function getYoutubeState(channelKey) {
+  return YoutubeState.findOne({ channelKey }).lean();
+}
+
+async function setYoutubeState(channelKey, lastVideoId) {
+  await YoutubeState.findOneAndUpdate(
+    { channelKey },
+    { channelKey, lastVideoId },
+    { upsert: true },
+  );
+}
+
 module.exports = {
   connectDB,
   getNextTicketNumber,
@@ -322,4 +342,6 @@ module.exports = {
   saveAutorolePanel,
   getAutorolePanel,
   deleteAutorolePanelsByChannel,
+  getYoutubeState,
+  setYoutubeState,
 };

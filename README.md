@@ -12,6 +12,7 @@ Bot de Discord para la comunidad de **Sirgio**. Incluye tickets, moderación, su
 | **Sugerencias** | `/sugerir` con votos y revisión del staff |
 | **Autoroles** | 4 paneles con reacciones (país, género, juegos, notificaciones) |
 | **Bienvenida** | Embed al unirse un miembro nuevo |
+| **YouTube** | Notificaciones automáticas de **Sirgio_o** y **SirgioTV** vía RSS |
 | **Auditoría** | Registro de mensajes, miembros, voz y cambios del servidor |
 | **Staff** | Envío de mensajes y embeds a canales o por DM |
 
@@ -128,9 +129,27 @@ Principales valores:
 | `/embeddm` | Enviar embed por DM |
 | `/staffcmds` | Ayuda de comandos de staff |
 
+## Notificaciones de YouTube
+
+El bot consulta el RSS de ambos canales cada **20 segundos**:
+
+| Canal YouTube | Nombre en el mensaje | ID |
+|---------------|----------------------|-----|
+| Sirgio_o | `Sirgio_o` | `UCHiCSO5ETUYchA5mBahcjmg` |
+| SirgioTV | `SirgioTV` | `UCr9-_GiZhW7w_Xq5Wqw5Npw` |
+
+Al detectar un video nuevo envía en el canal configurado:
+
+- Mención al rol **@Videos YouTube**
+- Texto: `¡Sirgio subio nuevo video en Sirgio_o! vayan a verlo` (o `SirgioTV`)
+- Enlace al video
+- Embed rojo con título, miniatura y hashtag (si el video lo incluye)
+
+Al reiniciar el bot **no** reenvía el último video; solo notifica subidas nuevas.
+
 ## Autoroles
 
-Al ejecutar `!autoroles` en un canal, el bot publica **8 mensajes** (4 banners + 4 embeds):
+Al ejecutar `!autoroles` en un canal, el bot publica **8 mensajes** (4 URLs de banner en texto plano + 4 embeds con reacciones):
 
 1. **Países** (naranja) — Un solo país a la vez
 2. **Género** (rojo) — Una sola opción a la vez
@@ -152,6 +171,7 @@ SirgioBOT/
 ├── suggestions.js    # Sugerencias
 ├── autoroles.js      # Paneles por reacciones
 ├── welcome.js        # Mensajes de bienvenida
+├── youtube.js        # Notificaciones RSS de YouTube
 ├── audit.js          # Logs de auditoría
 ├── staffcmds.js      # /say, /embed, etc.
 ├── commands.js       # Registro de slash commands

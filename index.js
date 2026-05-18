@@ -11,6 +11,7 @@ const commands = require('./commands');
 const autoroles = require('./autoroles');
 const staffcmds = require('./staffcmds');
 const welcome = require('./welcome');
+const youtube = require('./youtube');
 
 const client = new Client({
   intents: [
@@ -109,6 +110,7 @@ async function main() {
   audit.init(client);
   autoroles.init(client);
   welcome.init(client);
+  youtube.init(client);
   await client.login(config.token);
 }
 
