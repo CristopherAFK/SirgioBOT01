@@ -96,6 +96,59 @@ function buildCommands() {
       .toJSON(),
 
     new SlashCommandBuilder().setName('serverinfo').setDescription('Información del servidor').toJSON(),
+
+    new SlashCommandBuilder()
+      .setName('say')
+      .setDescription('[Staff] Envía un mensaje de texto a un canal')
+      .addChannelOption((o) =>
+        o.setName('canal').setDescription('Canal destino').setRequired(true),
+      )
+      .addStringOption((o) =>
+        o.setName('mensaje').setDescription('Contenido del mensaje').setRequired(true),
+      )
+      .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName('saydm')
+      .setDescription('[Staff] Envía un mensaje por DM a un usuario')
+      .addUserOption((o) => o.setName('usuario').setDescription('Usuario').setRequired(true))
+      .addStringOption((o) =>
+        o.setName('mensaje').setDescription('Contenido del mensaje').setRequired(true),
+      )
+      .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName('embed')
+      .setDescription('[Staff] Envía un embed personalizado a un canal')
+      .addChannelOption((o) =>
+        o.setName('canal').setDescription('Canal destino').setRequired(true),
+      )
+      .addStringOption((o) => o.setName('titulo').setDescription('Título del embed').setRequired(true))
+      .addStringOption((o) =>
+        o.setName('descripcion').setDescription('Descripción del embed').setRequired(true),
+      )
+      .addStringOption((o) => o.setName('color').setDescription('Color en hex (#FF5500)'))
+      .addStringOption((o) => o.setName('imagen').setDescription('URL de imagen'))
+      .addAttachmentOption((o) => o.setName('archivo_imagen').setDescription('Imagen adjunta'))
+      .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName('embeddm')
+      .setDescription('[Staff] Envía un embed personalizado por DM')
+      .addUserOption((o) => o.setName('usuario').setDescription('Usuario').setRequired(true))
+      .addStringOption((o) => o.setName('titulo').setDescription('Título del embed').setRequired(true))
+      .addStringOption((o) =>
+        o.setName('descripcion').setDescription('Descripción del embed').setRequired(true),
+      )
+      .addStringOption((o) => o.setName('color').setDescription('Color en hex (#FF5500)'))
+      .addStringOption((o) => o.setName('imagen').setDescription('URL de imagen'))
+      .addAttachmentOption((o) => o.setName('archivo_imagen').setDescription('Imagen adjunta'))
+      .toJSON(),
+
+    new SlashCommandBuilder()
+      .setName('staffcmds')
+      .setDescription('[Staff] Lista de comandos de mensajes y autoroles')
+      .toJSON(),
   ];
 }
 

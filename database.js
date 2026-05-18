@@ -83,6 +83,23 @@ const ModCase = mongoose.model(
   }),
 );
 
+const AutorolePanel = mongoose.model(
+  'AutorolePanel',
+  new mongoose.Schema({
+    messageId: { type: String, required: true, unique: true },
+    channelId: String,
+    guildId: String,
+    panelIndex: Number,
+    exclusive: { type: Boolean, default: false },
+    roles: [
+      {
+        emoji: String,
+        roleId: String,
+      },
+    ],
+  }),
+);
+
 const UserProfile = mongoose.model(
   'UserProfile',
   new mongoose.Schema({
@@ -268,6 +285,18 @@ async function deactivateCase(caseId) {
   await ModCase.updateOne({ caseId }, { active: false });
 }
 
+async function saveAutorolePanel(data) {
+  await AutorolePanel.findOneAndUpdate({ messageId: data.messageId }, data, { upsert: true });
+}
+
+async function getAutorolePanel(messageId) {
+  return AutorolePanel.findOne({ messageId }).lean();
+}
+
+async function deleteAutorolePanelsByChannel(channelId) {
+  await AutorolePanel.deleteMany({ channelId });
+}
+
 module.exports = {
   connectDB,
   getNextTicketNumber,
@@ -290,4 +319,7 @@ module.exports = {
   getModCase,
   getUserCases,
   deactivateCase,
+  saveAutorolePanel,
+  getAutorolePanel,
+  deleteAutorolePanelsByChannel,
 };

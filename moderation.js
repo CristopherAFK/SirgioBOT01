@@ -434,6 +434,8 @@ async function cmdHelp(interaction) {
     .setTitle('📖 Comandos de SirgioBOT')
     .setDescription(
       '**🎫 Tickets**\n`!Tpanel` · `!cerrar`\n\n' +
+        '**🎭 Autoroles (Staff)**\n`!autoroles`\n\n' +
+        '**📨 Mensajes (Staff)**\n`/say` · `/saydm` · `/embed` · `/embeddm` · `/staffcmds`\n\n' +
         '**💡 Sugerencias**\n`/sugerir`\n\n' +
         '**🛡️ Moderación (Staff)**\n' +
         '`/sancion` · `/removemute` · `/unban`\n' +
@@ -455,6 +457,13 @@ async function cmdGuia(interaction) {
       '**Tickets**\n' +
         '• `!Tpanel` publica el panel LagSupport.\n' +
         '• `!cerrar` cierra el ticket, envía valoración y transcripción.\n\n' +
+        '**Autoroles**\n' +
+        '• `!autoroles` publica 4 paneles (país, género, juegos, notificaciones) con reacciones.\n' +
+        '• País y género son exclusivos; juegos y notificaciones permiten varios roles.\n\n' +
+        '**Mensajes personalizados**\n' +
+        '• `/say` y `/saydm` para texto en canal o DM.\n' +
+        '• `/embed` y `/embeddm` con título, descripción, color e imagen (URL o adjunto).\n' +
+        '• `/staffcmds` lista todos los comandos de staff.\n\n' +
         '**Sugerencias**\n' +
         '• Los usuarios usan `/sugerir` en el canal designado.\n' +
         '• Revisa en el canal de staff: Aprobar/Rechazar/Pendiente con respuesta personalizada.\n\n' +

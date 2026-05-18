@@ -8,6 +8,8 @@ const moderation = require('./moderation');
 const tickets = require('./tickets');
 const suggestions = require('./suggestions');
 const commands = require('./commands');
+const autoroles = require('./autoroles');
+const staffcmds = require('./staffcmds');
 
 const client = new Client({
   intents: [
@@ -19,8 +21,9 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildInvites,
     GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.GuildMessageReactions,
   ],
-  partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
+  partials: [Partials.Channel, Partials.Message, Partials.GuildMember, Partials.Reaction],
 });
 
 function startHealthServer() {
@@ -51,6 +54,7 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
   try {
     if (await automod.handleMessage(message)) return;
+    if (await autoroles.handleMessage(message)) return;
     await tickets.handleMessage(message);
   } catch (err) {
     audit.logBotError('messageCreate', err);
@@ -61,6 +65,7 @@ client.on('interactionCreate', async (interaction) => {
   try {
     if (interaction.isChatInputCommand()) {
       if (await suggestions.handleSlash(interaction)) return;
+      if (await staffcmds.handleSlash(interaction)) return;
       if (await moderation.handleSlash(interaction)) return;
       return;
     }
@@ -101,6 +106,7 @@ async function main() {
   startHealthServer();
   await db.connectDB();
   audit.init(client);
+  autoroles.init(client);
   await client.login(config.token);
 }
 
