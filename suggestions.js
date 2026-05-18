@@ -10,12 +10,7 @@ const {
 } = require('discord.js');
 const config = require('./config');
 const db = require('./database');
-
-function isStaff(member) {
-  if (!member) return false;
-  if (member.id === config.ownerId) return true;
-  return member.roles.cache.has(config.staffRoleId);
-}
+const { isStaff } = require('./helpers');
 
 function statusMeta(status) {
   switch (status) {
@@ -284,40 +279,37 @@ async function handleSlash(interaction) {
   return true;
 }
 
-async function handleModal(interaction) {
-  if (interaction.customId.startsWith('sug_modal_pending#')) {
-    return handlePendingModal(interaction);
-  }
-
-  if (
-    interaction.customId === 'sug_modal_create' ||
-    interaction.customId === 'sug_modal_button'
-  ) {
-    await interaction.deferReply({ ephemeral: true });
-    await createSuggestion(interaction);
-    return true;
-  }
-
-  return false;
+function buildStaffResponseModal(publicMessageId, action) {
+  const titles = {
+    approve: '✅ Aprobar sugerencia',
+    reject: '❌ Rechazar sugerencia',
+    pending: '🟠 Marcar como pendiente',
+  };
+  const modal = new ModalBuilder()
+    .setCustomId(`sug_modal_review#${action}#${publicMessageId}`)
+    .setTitle(titles[action]);
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('mod_response')
+        .setLabel('Respuesta para el usuario')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true)
+        .setMaxLength(1000)
+        .setPlaceholder('Escribe la respuesta que verá el usuario en la sugerencia...'),
+    ),
+  );
+  return modal;
 }
 
-async function handlePendingModal(interaction) {
-  const publicMessageId = interaction.customId.replace('sug_modal_pending#', '');
+async function applyStaffReview(interaction, publicMessageId, action, modResponse) {
   const suggestion = await db.getSuggestion(publicMessageId);
-
   if (!suggestion) {
-    await interaction.reply({ content: '❌ Sugerencia no encontrada.', ephemeral: true });
-    return true;
+    return interaction.reply({ content: '❌ Sugerencia no encontrada.', ephemeral: true });
   }
 
-  if (!isStaff(interaction.member)) {
-    await interaction.reply({ content: '❌ Solo el staff puede hacer esto.', ephemeral: true });
-    return true;
-  }
-
-  const reason = interaction.fields.getTextInputValue('pending_reason').trim();
-  suggestion.status = 'pending';
-  suggestion.modResponse = reason;
+  suggestion.status = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'pending';
+  suggestion.modResponse = modResponse;
   suggestion.modTag = interaction.user.tag;
   suggestion.modId = interaction.user.id;
   await db.saveSuggestion(publicMessageId, suggestion);
@@ -325,11 +317,35 @@ async function handlePendingModal(interaction) {
   await updatePublicMessage(interaction.client, publicMessageId);
   await updateStaffMessage(interaction.client, publicMessageId);
 
-  await interaction.reply({
-    content: '🟠 Sugerencia marcada como pendiente.',
-    ephemeral: true,
-  });
-  return true;
+  const msgs = {
+    approve: '✅ Sugerencia aprobada con tu respuesta.',
+    reject: '❌ Sugerencia rechazada con tu respuesta.',
+    pending: '🟠 Sugerencia marcada como pendiente.',
+  };
+  await interaction.reply({ content: msgs[action], ephemeral: true });
+}
+
+async function handleModal(interaction) {
+  const reviewMatch = interaction.customId.match(/^sug_modal_review#(approve|reject|pending)#(.+)$/);
+  if (reviewMatch) {
+    if (!isStaff(interaction.member)) {
+      await interaction.reply({ content: '❌ Solo el staff.', ephemeral: true });
+      return true;
+    }
+    const action = reviewMatch[1];
+    const publicMessageId = reviewMatch[2];
+    const modResponse = interaction.fields.getTextInputValue('mod_response').trim();
+    await applyStaffReview(interaction, publicMessageId, action, modResponse);
+    return true;
+  }
+
+  if (interaction.customId === 'sug_modal_create' || interaction.customId === 'sug_modal_button') {
+    await interaction.deferReply({ ephemeral: true });
+    await createSuggestion(interaction);
+    return true;
+  }
+
+  return false;
 }
 
 async function handleButton(interaction) {
@@ -427,40 +443,11 @@ async function handleButton(interaction) {
       return interaction.reply({ content: '❌ Sugerencia no encontrada.', ephemeral: true });
     }
 
-    if (customId.startsWith('sug_staff_pending#')) {
-      const modal = new ModalBuilder()
-        .setCustomId(`sug_modal_pending#${publicMessageId}`)
-        .setTitle('🟠 Marcar como pendiente');
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(
-          new TextInputBuilder()
-            .setCustomId('pending_reason')
-            .setLabel('Motivo / respuesta para el usuario')
-            .setStyle(TextInputStyle.Paragraph)
-            .setRequired(true)
-            .setMaxLength(1000)
-            .setPlaceholder('Explica por qué queda pendiente...'),
-        ),
-      );
-      return interaction.showModal(modal);
-    }
+    let action = 'pending';
+    if (customId.startsWith('sug_staff_approve#')) action = 'approve';
+    if (customId.startsWith('sug_staff_reject#')) action = 'reject';
 
-    const approved = customId.startsWith('sug_staff_approve#');
-    suggestion.status = approved ? 'approved' : 'rejected';
-    suggestion.modResponse = approved
-      ? 'Tu sugerencia fue **aprobada** por el staff. ¡Gracias por participar!'
-      : 'Tu sugerencia fue **rechazada** por el staff. Puedes enviar otra idea más adelante.';
-    suggestion.modTag = interaction.user.tag;
-    suggestion.modId = interaction.user.id;
-    await db.saveSuggestion(publicMessageId, suggestion);
-
-    await updatePublicMessage(interaction.client, publicMessageId);
-    await updateStaffMessage(interaction.client, publicMessageId);
-
-    return interaction.reply({
-      content: approved ? '✅ Sugerencia aprobada.' : '❌ Sugerencia rechazada.',
-      ephemeral: true,
-    });
+    return interaction.showModal(buildStaffResponseModal(publicMessageId, action));
   }
 
   return false;
