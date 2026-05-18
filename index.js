@@ -10,6 +10,7 @@ const suggestions = require('./suggestions');
 const commands = require('./commands');
 const autoroles = require('./autoroles');
 const staffcmds = require('./staffcmds');
+const welcome = require('./welcome');
 
 const client = new Client({
   intents: [
@@ -107,6 +108,7 @@ async function main() {
   await db.connectDB();
   audit.init(client);
   autoroles.init(client);
+  welcome.init(client);
   await client.login(config.token);
 }
 

@@ -8,7 +8,7 @@ const PANEL_HEADER = '**Reacciona con el emoji correspondiente para obtener el r
 function buildPanelDescription(roles) {
   return (
     PANEL_HEADER +
-    roles.map((r) => `${r.emoji} → <@&${r.roleId}> - *${r.label}*`).join('\n')
+    roles.map((r) => `${r.emoji} → <@&${r.roleId}> - *${r.label}*`).join('\n\n')
   );
 }
 
@@ -23,10 +23,17 @@ function emojiKey(emoji) {
   return emoji.id || emoji.name;
 }
 
+function buildBannerEmbed(bannerUrl) {
+  return new EmbedBuilder().setImage(bannerUrl);
+}
+
 async function publishPanels(channel) {
   const sent = [];
   for (let i = 0; i < config.autorolePanels.length; i++) {
     const panelConfig = config.autorolePanels[i];
+    if (panelConfig.bannerUrl) {
+      await channel.send({ embeds: [buildBannerEmbed(panelConfig.bannerUrl)] });
+    }
     const msg = await channel.send({ embeds: [buildPanelEmbed(panelConfig)] });
     for (const role of panelConfig.roles) {
       await msg.react(role.emoji).catch((err) => {

@@ -9,6 +9,11 @@ module.exports = {
   reviewsChannelId: '1506013832319860808',
   suggestionsChannelId: '1440873532580954112',
   staffLogChannelId: '1479896611105538247',
+  welcomeChannelId: '1212999950275837972',
+  rulesChannelId: '1212998742505037864',
+  autorolesChannelId: '1422713049957273621',
+  welcomeImageUrl:
+    'https://images-ext-1.discordapp.net/external/kGlOY2oGWM29Ofv9gWe8OaeOAvLoD8RIrT1RtOmEfHc/%3Fformat%3Dwebp%26width%3D800%26height%3D834/https/images-ext-1.discordapp.net/external/gA9Y8BTjysXecAKEi8pwfnh7inNh6kawKGVhZQnlwDM/https/cdn.nekotina.com/guilds/1212886282645147768/23ff9a0e-6163-4852-abcb-54a938a41121.jpg?format=webp&width=545&height=569',
   audit: {
     moderation: '1479896611105538247',
     messages: '1479896611105538247',
@@ -21,7 +26,7 @@ module.exports = {
   colors: {
     panel: 0x5865f2,
     confirm: 0x57f287,
-    welcome: 0x5865f2,
+    welcome: 0x87ceeb,
     faq: 0xfee75c,
     review: 0xeb459e,
     close: 0xed4245,
@@ -49,6 +54,8 @@ module.exports = {
     {
       colorKey: 'autoroleCountry',
       exclusive: true,
+      bannerUrl:
+        'https://media.discordapp.net/attachments/1225629661627682846/1422268955170443274/58_sin_titulo_20250929110844.png?ex=6a0c992f&is=6a0b47af&hm=e075b3653cb76c642608015440de6424c73e53d21f762c9d2aeeabe64ec63461&=&format=webp&quality=lossless',
       roles: [
         { emoji: '🇻🇪', roleId: '1268383665168060517', label: 'Venezuela' },
         { emoji: '🇨🇴', roleId: '1268383284023525426', label: 'Colombia' },
@@ -73,6 +80,8 @@ module.exports = {
     {
       colorKey: 'autoroleGender',
       exclusive: true,
+      bannerUrl:
+        'https://media.discordapp.net/attachments/1225629661627682846/1422283408935092376/58_sin_titulo_20250929120620.png?ex=6a0ca6a5&is=6a0b5525&hm=2e15b12ea4f6fba47846584650231523142300b2b8d6c6f24621ec32a95ca731&=&format=webp&quality=lossless',
       roles: [
         { emoji: '🔒', roleId: '1268381141648277616', label: 'Prefiero no decir' },
         { emoji: '⚧', roleId: '1268377460286951488', label: 'No binario/Otro' },
@@ -83,6 +92,8 @@ module.exports = {
     {
       colorKey: 'autoroleGames',
       exclusive: false,
+      bannerUrl:
+        'https://media.discordapp.net/attachments/1225629661627682846/1422289906079629403/58_sin_titulo_20250929123134.png?ex=6a0cacb2&is=6a0b5b32&hm=2b27c1c881278ab211ac7b4afff3190e5d9c5d77bb60fb8a9d298df18a22cb41&=&format=webp&quality=lossless',
       roles: [
         { emoji: '⬛', roleId: '1350919243339923609', label: 'Roblox' },
         { emoji: '🚀', roleId: '1350917758988324885', label: 'Among Us' },
@@ -100,6 +111,8 @@ module.exports = {
     {
       colorKey: 'autoroleNotify',
       exclusive: false,
+      bannerUrl:
+        'https://media.discordapp.net/attachments/1225629661627682846/1422305674318053426/58_sin_titulo_20250929133434.png?ex=6a0cbb61&is=6a0b69e1&hm=5ed5137e53642afea3e234137ae7a3a2745d2f631303328efc6f32c0905e1891&=&format=webp&quality=lossless',
       roles: [
         { emoji: '🎉', roleId: '1268376127920148510', label: 'Notificaciones de eventos' },
         { emoji: '📺', roleId: '1268374279913996328', label: 'Anuncios de Directos en youtube' },
