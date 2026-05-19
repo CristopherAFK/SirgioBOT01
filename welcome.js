@@ -2,17 +2,16 @@ const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const config = require('./config');
 const { generateWelcomeCard } = require('./welcomeCard');
 
-function buildWelcomeEmbed() {
+function buildWelcomeEmbed(member) {
   return new EmbedBuilder()
     .setColor(config.colors.welcome)
     .setDescription(
       [
-        '¡Bienvenido/a al servidor!',
+        `¡Bienvenid@ ${member.user.username}! ✨`,
         '',
-        `📜 Lee las reglas en <#${config.rulesChannelId}>`,
-        `🎭 Obtén tus autoroles en <#${config.autorolesChannelId}>`,
+        `Por favor, pasa a leer <#${config.rulesChannelId}> y visita <#${config.autorolesChannelId}> para obtener tus roles.`,
         '',
-        '¡Disfruta tu estadía! ⚓',
+        '¡Esperamos que disfrutes tu estancia en el servidor!',
       ].join('\n'),
     )
     .setImage('attachment://welcome.png')
@@ -32,7 +31,7 @@ async function sendWelcome(member) {
 
   await channel.send({
     content: `${member}`,
-    embeds: [buildWelcomeEmbed()],
+    embeds: [buildWelcomeEmbed(member)],
     files: [attachment],
   });
 }
