@@ -3,13 +3,7 @@ const config = require('./config');
 const { generateWelcomeCard } = require('./welcomeCard');
 
 function buildWelcomeMessage(member) {
-  return [
-    `${member} ¡Bienvenid@ ${member.user.username}! ✨`,
-    '',
-    `Por favor, pasa a leer <#${config.rulesChannelId}> y visita <#${config.autorolesChannelId}> para obtener tus roles.`,
-    '',
-    '¡Esperamos que disfrutes tu estancia en el servidor!',
-  ].join('\n');
+  return `**${member} Bienvenid@ al Reino del Lag, No olvides pasarte por <#${config.autorolesChannelId}> y leer las <#${config.rulesChannelId}> ¡Disfruta!**`;
 }
 
 async function sendWelcome(member) {

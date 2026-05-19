@@ -3,6 +3,11 @@ const sharp = require('sharp');
 
 const BANNER_PATH = path.join(__dirname, 'assets', 'welcome-banner.png');
 
+// Centro del círculo vacío en welcome-banner.png (826×465)
+const AVATAR_CENTER_X = 0.502;
+const AVATAR_CENTER_Y = 0.48;
+const AVATAR_SIZE_RATIO = 0.158;
+
 function escapeXml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -112,10 +117,10 @@ async function generateWelcomeCard(member) {
   const meta = await sharp(BANNER_PATH).metadata();
   const width = meta.width || 826;
   const height = meta.height || 465;
-  const avatarSize = Math.round(width * 0.19);
+  const avatarSize = Math.round(width * AVATAR_SIZE_RATIO);
   const borderedSize = avatarSize + 10;
-  const avatarX = Math.round(width / 2 - borderedSize / 2);
-  const avatarY = Math.round(height * 0.36 - borderedSize / 2);
+  const avatarX = Math.round(width * AVATAR_CENTER_X - borderedSize / 2);
+  const avatarY = Math.round(height * AVATAR_CENTER_Y - borderedSize / 2);
 
   const avatarUrl = member.user.displayAvatarURL({ size: 256, extension: 'png' });
   const avatarBuffer = await fetchAvatarBuffer(avatarUrl);
