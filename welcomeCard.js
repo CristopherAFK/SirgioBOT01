@@ -11,44 +11,44 @@ function escapeXml(str) {
     .replace(/"/g, '&quot;');
 }
 
-function truncate(text, max = 20) {
+function truncate(text, max = 18) {
   if (text.length <= max) return text;
   return `${text.slice(0, max - 1)}…`;
 }
 
-function buildTextSvg(username, memberCount, width, height) {
-  const name = escapeXml(truncate(username, 20).toUpperCase());
-  const footer = escapeXml(`CONTIGO SOMOS ${memberCount} MIEMBRO`);
-  const titleY = Math.round(height * 0.115);
-  const footerY = Math.round(height * 0.93);
-  const barW = Math.round(width * 0.88);
+function buildTextSvg(username, memberCount, width, height, avatarSize, avatarY) {
+  const name = escapeXml(truncate(username, 18).toUpperCase());
+  const footer = escapeXml(`CONTIGO SOMOS ${memberCount} MIEMBROS`);
+  const nameY = avatarY + avatarSize + Math.round(height * 0.06);
+  const footerY = Math.round(height * 0.91);
+  const barW = Math.round(width * 0.9);
   const barX = Math.round((width - barW) / 2);
 
   return Buffer.from(`
     <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#00c8ff" flood-opacity="0.95"/>
-          <feDropShadow dx="0" dy="3" stdDeviation="6" flood-color="#000000" flood-opacity="0.85"/>
+          <feDropShadow dx="0" dy="0" stdDeviation="3" flood-color="#00c8ff" flood-opacity="0.9"/>
+          <feDropShadow dx="0" dy="2" stdDeviation="5" flood-color="#000000" flood-opacity="0.85"/>
         </filter>
         <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" style="stop-color:#b8f4ff"/>
+          <stop offset="0%" style="stop-color:#d4f7ff"/>
           <stop offset="50%" style="stop-color:#ffffff"/>
-          <stop offset="100%" style="stop-color:#7ee8ff"/>
+          <stop offset="100%" style="stop-color:#8ee9ff"/>
         </linearGradient>
       </defs>
-      <rect x="${barX}" y="${titleY - 42}" width="${barW}" height="56" rx="10" fill="rgba(0,18,40,0.45)"/>
-      <rect x="${barX}" y="${footerY - 38}" width="${barW}" height="46" rx="10" fill="rgba(0,18,40,0.45)"/>
+      <rect x="${barX}" y="${footerY - 34}" width="${barW}" height="42" rx="8" fill="rgba(0,18,40,0.5)"/>
       <text
-        x="50%" y="${titleY}"
+        x="50%"
+        y="${nameY}"
         text-anchor="middle"
         dominant-baseline="middle"
         font-family="Impact, Haettenschweiler, 'Arial Black', sans-serif"
-        font-size="${Math.round(width * 0.062)}"
+        font-size="${Math.round(width * 0.055)}"
         font-weight="900"
-        letter-spacing="4"
+        letter-spacing="3"
         fill="url(#textGrad)"
-        stroke="#0088cc"
+        stroke="#0077aa"
         stroke-width="1.2"
         paint-order="stroke fill"
         filter="url(#glow)"
@@ -59,11 +59,11 @@ function buildTextSvg(username, memberCount, width, height) {
         text-anchor="middle"
         dominant-baseline="middle"
         font-family="Impact, Haettenschweiler, 'Arial Black', sans-serif"
-        font-size="${Math.round(width * 0.038)}"
+        font-size="${Math.round(width * 0.034)}"
         font-weight="900"
-        letter-spacing="3"
+        letter-spacing="2"
         fill="url(#textGrad)"
-        stroke="#0088cc"
+        stroke="#0077aa"
         stroke-width="1"
         paint-order="stroke fill"
         filter="url(#glow)"
@@ -78,15 +78,32 @@ async function fetchAvatarBuffer(url) {
   return Buffer.from(await res.arrayBuffer());
 }
 
-async function circleAvatar(avatarBuffer, size) {
+async function circleAvatarWithBorder(avatarBuffer, size, border = 5) {
+  const inner = await sharp(avatarBuffer)
+    .resize(size, size, { fit: 'cover' })
+    .png()
+    .toBuffer();
+
   const mask = Buffer.from(
     `<svg width="${size}" height="${size}">
       <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}" fill="white"/>
     </svg>`,
   );
-  return sharp(avatarBuffer)
-    .resize(size, size, { fit: 'cover' })
+
+  const circular = await sharp(inner)
     .composite([{ input: mask, blend: 'dest-in' }])
+    .png()
+    .toBuffer();
+
+  const total = size + border * 2;
+  const ring = Buffer.from(
+    `<svg width="${total}" height="${total}">
+      <circle cx="${total / 2}" cy="${total / 2}" r="${total / 2}" fill="white"/>
+    </svg>`,
+  );
+
+  return sharp(ring)
+    .composite([{ input: circular, left: border, top: border }])
     .png()
     .toBuffer();
 }
@@ -95,14 +112,22 @@ async function generateWelcomeCard(member) {
   const meta = await sharp(BANNER_PATH).metadata();
   const width = meta.width || 826;
   const height = meta.height || 465;
-  const avatarSize = Math.round(width * 0.17);
-  const avatarX = Math.round(width / 2 - avatarSize / 2);
-  const avatarY = Math.round(height / 2 - avatarSize / 2 - height * 0.04);
+  const avatarSize = Math.round(width * 0.19);
+  const borderedSize = avatarSize + 10;
+  const avatarX = Math.round(width / 2 - borderedSize / 2);
+  const avatarY = Math.round(height * 0.36 - borderedSize / 2);
 
   const avatarUrl = member.user.displayAvatarURL({ size: 256, extension: 'png' });
   const avatarBuffer = await fetchAvatarBuffer(avatarUrl);
-  const circularAvatar = await circleAvatar(avatarBuffer, avatarSize);
-  const textOverlay = buildTextSvg(member.user.username, member.guild.memberCount, width, height);
+  const circularAvatar = await circleAvatarWithBorder(avatarBuffer, avatarSize);
+  const textOverlay = buildTextSvg(
+    member.user.username,
+    member.guild.memberCount,
+    width,
+    height,
+    avatarSize,
+    avatarY,
+  );
 
   return sharp(BANNER_PATH)
     .composite([
