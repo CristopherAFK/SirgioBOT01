@@ -29,8 +29,6 @@ module.exports = {
       },
     ],
   },
-  welcomeImageUrl:
-    'https://images-ext-1.discordapp.net/external/kGlOY2oGWM29Ofv9gWe8OaeOAvLoD8RIrT1RtOmEfHc/%3Fformat%3Dwebp%26width%3D800%26height%3D834/https/images-ext-1.discordapp.net/external/gA9Y8BTjysXecAKEi8pwfnh7inNh6kawKGVhZQnlwDM/https/cdn.nekotina.com/guilds/1212886282645147768/23ff9a0e-6163-4852-abcb-54a938a41121.jpg?format=webp&width=545&height=569',
   audit: {
     moderation: '1479896611105538247',
     messages: '1479896611105538247',

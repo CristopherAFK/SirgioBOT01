@@ -1,24 +1,21 @@
-const { EmbedBuilder } = require('discord.js');
+const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const config = require('./config');
+const { generateWelcomeCard } = require('./welcomeCard');
 
-function buildWelcomeEmbed(member) {
-  const avatar = member.user.displayAvatarURL({ size: 256, extension: 'png' });
+function buildWelcomeEmbed() {
   return new EmbedBuilder()
     .setColor(config.colors.welcome)
-    .setTitle(`🏴‍☠️ ¡Bienvenido/a, ${member.user.username}!`)
     .setDescription(
       [
-        `Hola ${member}, nos alegra tenerte en **El Reino del Lag**.`,
+        '¡Bienvenido/a al servidor!',
         '',
         `📜 Lee las reglas en <#${config.rulesChannelId}>`,
         `🎭 Obtén tus autoroles en <#${config.autorolesChannelId}>`,
         '',
-        '¡Disfruta tu estadía y que tengas una buena travesía! ⚓',
+        '¡Disfruta tu estadía! ⚓',
       ].join('\n'),
     )
-    .setThumbnail(avatar)
-    .setImage(config.welcomeImageUrl)
-    .setFooter({ text: `Miembro #${member.guild.memberCount}` })
+    .setImage('attachment://welcome.png')
     .setTimestamp();
 }
 
@@ -29,7 +26,15 @@ async function sendWelcome(member) {
     console.error('Canal de bienvenida no encontrado:', config.welcomeChannelId);
     return;
   }
-  await channel.send({ content: `${member}`, embeds: [buildWelcomeEmbed(member)] });
+
+  const imageBuffer = await generateWelcomeCard(member);
+  const attachment = new AttachmentBuilder(imageBuffer, { name: 'welcome.png' });
+
+  await channel.send({
+    content: `${member}`,
+    embeds: [buildWelcomeEmbed()],
+    files: [attachment],
+  });
 }
 
 function init(client) {
