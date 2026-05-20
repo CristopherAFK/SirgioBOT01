@@ -86,6 +86,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isModalSubmit()) {
       if (await suggestions.handleModal(interaction)) return;
       if (await tickets.handleModal(interaction, client)) return;
+      if (await staffcmds.handleModal(interaction)) return;
     }
   } catch (err) {
     audit.logBotError('interactionCreate', err);

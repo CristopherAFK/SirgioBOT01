@@ -103,18 +103,12 @@ function buildCommands() {
       .addChannelOption((o) =>
         o.setName('canal').setDescription('Canal destino').setRequired(true),
       )
-      .addStringOption((o) =>
-        o.setName('mensaje').setDescription('Contenido del mensaje').setRequired(true),
-      )
       .toJSON(),
 
     new SlashCommandBuilder()
       .setName('saydm')
       .setDescription('[Staff] Envía un mensaje por DM a un usuario')
       .addUserOption((o) => o.setName('usuario').setDescription('Usuario').setRequired(true))
-      .addStringOption((o) =>
-        o.setName('mensaje').setDescription('Contenido del mensaje').setRequired(true),
-      )
       .toJSON(),
 
     new SlashCommandBuilder()
@@ -123,26 +117,12 @@ function buildCommands() {
       .addChannelOption((o) =>
         o.setName('canal').setDescription('Canal destino').setRequired(true),
       )
-      .addStringOption((o) => o.setName('titulo').setDescription('Título del embed').setRequired(true))
-      .addStringOption((o) =>
-        o.setName('descripcion').setDescription('Descripción del embed').setRequired(true),
-      )
-      .addStringOption((o) => o.setName('color').setDescription('Color en hex (#FF5500)'))
-      .addStringOption((o) => o.setName('imagen').setDescription('URL de imagen'))
-      .addAttachmentOption((o) => o.setName('archivo_imagen').setDescription('Imagen adjunta'))
       .toJSON(),
 
     new SlashCommandBuilder()
       .setName('embeddm')
       .setDescription('[Staff] Envía un embed personalizado por DM')
       .addUserOption((o) => o.setName('usuario').setDescription('Usuario').setRequired(true))
-      .addStringOption((o) => o.setName('titulo').setDescription('Título del embed').setRequired(true))
-      .addStringOption((o) =>
-        o.setName('descripcion').setDescription('Descripción del embed').setRequired(true),
-      )
-      .addStringOption((o) => o.setName('color').setDescription('Color en hex (#FF5500)'))
-      .addStringOption((o) => o.setName('imagen').setDescription('URL de imagen'))
-      .addAttachmentOption((o) => o.setName('archivo_imagen').setDescription('Imagen adjunta'))
       .toJSON(),
 
     new SlashCommandBuilder()
