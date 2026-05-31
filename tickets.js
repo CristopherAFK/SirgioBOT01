@@ -13,6 +13,7 @@ const {
 } = require('discord.js');
 const config = require('./config');
 const db = require('./database');
+const audit = require('./audit');
 const { isStaff } = require('./helpers');
 
 const pendingTickets = new Map();
@@ -184,6 +185,19 @@ async function createTicketChannel(guild, member, categoryValue, meta = {}) {
     components: [buildAttendRow()],
   });
 
+  await audit.logStaffEvent('ticket.open', {
+    actorId: member.id,
+    actorTag: member.user.tag,
+    channelId: channel.id,
+    source: 'user',
+    payload: {
+      ticketNumber,
+      category: categoryLabel,
+      categoryValue,
+      meta,
+    },
+  });
+
   return { channel, ticketNumber, categoryLabel };
 }
 
@@ -200,19 +214,38 @@ async function closeTicket(channel, closedBy, client) {
   }
 
   const reviewId = `${channel.id}_${Date.now()}`;
+  const closedAt = Date.now();
   await db.savePendingReview(reviewId, {
     userId: ticket.userId,
     category: ticket.category,
     ticketNumber: ticket.number,
     channelId: channel.id,
     channelName: channel.name,
+    attendedBy: ticket.attendedBy || null,
+    attendedByTag: ticket.attendedByTag || null,
     closedBy: closedBy.id,
     closedByTag: closedBy.user.tag,
-    closedAt: Date.now(),
+    closedAt,
     transcript,
     submitted: false,
   });
   await db.deleteTicket(channel.id);
+
+  await audit.logStaffEvent('ticket.close', {
+    actorId: closedBy.id,
+    actorTag: closedBy.user.tag,
+    targetId: ticket.userId,
+    channelId: channel.id,
+    source: 'staff',
+    payload: {
+      reviewId,
+      ticketNumber: ticket.number,
+      category: ticket.category,
+      attendedBy: ticket.attendedBy,
+      attendedByTag: ticket.attendedByTag,
+      closedAt,
+    },
+  });
 
   if (user) {
     try {
@@ -309,6 +342,20 @@ async function handleButton(interaction, client) {
     if (!isStaff(interaction.member)) return interaction.reply({ content: '❌ Solo staff.', ephemeral: true });
     const ticket = await db.getTicketByChannel(interaction.channel.id);
     if (!ticket) return interaction.reply({ content: '❌ Ticket inválido.', ephemeral: true });
+    await db.saveTicket(interaction.channel.id, {
+      ...ticket,
+      attendedBy: interaction.user.id,
+      attendedByTag: interaction.user.tag,
+      attendedAt: Date.now(),
+    });
+    await audit.logStaffEvent('ticket.attend', {
+      actorId: interaction.user.id,
+      actorTag: interaction.user.tag,
+      targetId: ticket.userId,
+      channelId: interaction.channel.id,
+      source: 'staff',
+      payload: { ticketNumber: ticket.number, category: ticket.category },
+    });
     const user = await interaction.guild.members.fetch(ticket.userId).catch(() => null);
     await interaction.reply({
       embeds: [
@@ -409,6 +456,41 @@ async function handleModal(interaction, client) {
   }
   review.opinion = interaction.fields.getTextInputValue('opinion_text')?.trim() || null;
   review.submitted = true;
+  const ratedAt = Date.now();
+  await db.saveTicketReview({
+    reviewId,
+    guildId: config.guildId,
+    ticketNumber: review.ticketNumber,
+    userId: review.userId,
+    category: review.category,
+    channelId: review.channelId,
+    channelName: review.channelName,
+    attendedBy: review.attendedBy || null,
+    attendedByTag: review.attendedByTag || null,
+    closedBy: review.closedBy,
+    closedByTag: review.closedByTag,
+    closedAt: review.closedAt,
+    ratedAt,
+    rating: review.rating,
+    opinion: review.opinion,
+    transcript: review.transcript,
+  });
+  await audit.logStaffEvent('ticket.review', {
+    actorId: review.userId,
+    targetId: review.closedBy,
+    source: 'user',
+    payload: {
+      reviewId,
+      ticketNumber: review.ticketNumber,
+      rating: review.rating,
+      opinion: review.opinion,
+      closedBy: review.closedBy,
+      closedByTag: review.closedByTag,
+      attendedBy: review.attendedBy,
+      attendedByTag: review.attendedByTag,
+      ratedAt,
+    },
+  });
   await sendReviewToChannel(client, review, reviewId);
   await db.deletePendingReview(reviewId);
   await interaction.reply({ content: '✅ ¡Gracias por tu valoración!', ephemeral: true });

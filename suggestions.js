@@ -10,6 +10,7 @@ const {
 } = require('discord.js');
 const config = require('./config');
 const db = require('./database');
+const audit = require('./audit');
 const { isStaff } = require('./helpers');
 
 function statusMeta(status) {
@@ -209,6 +210,14 @@ async function createSuggestion(interaction) {
   suggestion.staffMessageId = staffMsg.id;
   await db.saveSuggestion(msg.id, suggestion);
 
+  await audit.logStaffEvent('suggestion.create', {
+    actorId: interaction.user.id,
+    actorTag: interaction.user.tag,
+    messageId: msg.id,
+    source: 'user',
+    payload: { title, content, messageId: msg.id, threadId: thread.id },
+  });
+
   await interaction.editReply({
     content: `✅ Tu sugerencia fue publicada: ${msg}`,
   });
@@ -313,6 +322,21 @@ async function applyStaffReview(interaction, publicMessageId, action, modRespons
   suggestion.modTag = interaction.user.tag;
   suggestion.modId = interaction.user.id;
   await db.saveSuggestion(publicMessageId, suggestion);
+
+  await audit.logStaffEvent('suggestion.review', {
+    actorId: interaction.user.id,
+    actorTag: interaction.user.tag,
+    messageId: publicMessageId,
+    source: 'staff',
+    payload: {
+      action,
+      status: suggestion.status,
+      title: suggestion.title,
+      modResponse,
+      upvotes: suggestion.upvotes.length,
+      downvotes: suggestion.downvotes.length,
+    },
+  });
 
   await updatePublicMessage(interaction.client, publicMessageId);
   await updateStaffMessage(interaction.client, publicMessageId);

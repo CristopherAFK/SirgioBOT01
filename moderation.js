@@ -384,6 +384,16 @@ async function cmdRemoveWarn(interaction) {
   const user = interaction.options.getUser('usuario', true);
   const cantidad = interaction.options.getInteger('cantidad') || 1;
   const removed = await db.removeStaffWarns(user.id, cantidad);
+  if (removed) {
+    await audit.logStaffEvent('moderation.removewarn', {
+      actorId: interaction.user.id,
+      actorTag: interaction.user.tag,
+      targetId: user.id,
+      targetTag: user.tag,
+      source: 'staff',
+      payload: { count: removed, requested: cantidad },
+    });
+  }
   await interaction.editReply({
     content: removed
       ? `✅ Se removieron ${removed} warn(s) de ${user.tag}.`
@@ -425,6 +435,14 @@ async function cmdClearWarns(interaction) {
   await interaction.deferReply({ ephemeral: true });
   const user = interaction.options.getUser('usuario', true);
   await db.updateUserProfile(user.id, { staffWarns: [] });
+  await audit.logStaffEvent('moderation.clearwarns', {
+    actorId: interaction.user.id,
+    actorTag: interaction.user.tag,
+    targetId: user.id,
+    targetTag: user.tag,
+    source: 'staff',
+    payload: {},
+  });
   await interaction.editReply({ content: `✅ Todos los warns de ${user.tag} fueron eliminados.` });
 }
 
@@ -477,7 +495,7 @@ async function cmdGuia(interaction) {
         '• 3 warns automáticos = mute progresivo (10m→2h máx).\n' +
         '• Los usuarios pueden apelar desde el MD.\n\n' +
         '**Auditoría**\n' +
-        '• Todo se registra en el canal de logs: mods, mensajes, miembros, voz y servidor.',
+        '• Todo se registra en canales de logs y en MongoDB (`auditlogs`) para métricas del staff.',
     )
     .setThumbnail(config.logoUrl);
   await interaction.reply({ embeds: [embed], ephemeral: true });

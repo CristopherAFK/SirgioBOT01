@@ -21,6 +21,9 @@ const Ticket = mongoose.model(
     categoryValue: String,
     number: String,
     openedAt: Number,
+    attendedBy: String,
+    attendedByTag: String,
+    attendedAt: Number,
     meta: mongoose.Schema.Types.Mixed,
   }),
 );
@@ -34,6 +37,8 @@ const PendingReview = mongoose.model(
     ticketNumber: String,
     channelId: String,
     channelName: String,
+    attendedBy: String,
+    attendedByTag: String,
     closedBy: String,
     closedByTag: String,
     closedAt: Number,
@@ -41,6 +46,47 @@ const PendingReview = mongoose.model(
     rating: Number,
     opinion: String,
     submitted: { type: Boolean, default: false },
+  }),
+);
+
+const TicketReview = mongoose.model(
+  'TicketReview',
+  new mongoose.Schema({
+    reviewId: { type: String, required: true, unique: true },
+    guildId: String,
+    ticketNumber: String,
+    userId: String,
+    category: String,
+    channelId: String,
+    channelName: String,
+    attendedBy: String,
+    attendedByTag: String,
+    closedBy: String,
+    closedByTag: String,
+    closedAt: Number,
+    ratedAt: Number,
+    rating: Number,
+    opinion: String,
+    transcript: String,
+  }),
+);
+
+const AuditLog = mongoose.model(
+  'AuditLog',
+  new mongoose.Schema({
+    guildId: String,
+    category: { type: String, required: true },
+    action: { type: String, required: true },
+    at: { type: Number, default: () => Date.now() },
+    actorId: String,
+    actorTag: String,
+    targetId: String,
+    targetTag: String,
+    channelId: String,
+    messageId: String,
+    caseId: String,
+    source: String,
+    payload: mongoose.Schema.Types.Mixed,
   }),
 );
 
@@ -149,6 +195,21 @@ async function connectDB() {
     { $setOnInsert: { ticketCounter: 0, modCaseCounter: 0 } },
     { upsert: true, new: true },
   );
+
+  await AuditLog.createIndexes([
+    { guildId: 1, at: -1 },
+    { category: 1, at: -1 },
+    { actorId: 1, at: -1 },
+    { targetId: 1, at: -1 },
+    { caseId: 1 },
+    { action: 1, at: -1 },
+  ]);
+  await TicketReview.createIndexes([
+    { guildId: 1, ratedAt: -1 },
+    { closedBy: 1, ratedAt: -1 },
+    { attendedBy: 1, ratedAt: -1 },
+    { ticketNumber: 1 },
+  ]);
 
   await migrateFromJsonIfNeeded();
 }
@@ -317,6 +378,28 @@ async function setYoutubeState(channelKey, lastVideoId) {
   );
 }
 
+async function saveAuditLog(event) {
+  await AuditLog.create({
+    guildId: event.guildId || config.guildId,
+    category: event.category,
+    action: event.action,
+    at: event.at || Date.now(),
+    actorId: event.actorId ?? null,
+    actorTag: event.actorTag ?? null,
+    targetId: event.targetId ?? null,
+    targetTag: event.targetTag ?? null,
+    channelId: event.channelId ?? null,
+    messageId: event.messageId ?? null,
+    caseId: event.caseId ?? null,
+    source: event.source ?? null,
+    payload: event.payload ?? {},
+  });
+}
+
+async function saveTicketReview(data) {
+  await TicketReview.findOneAndUpdate({ reviewId: data.reviewId }, data, { upsert: true });
+}
+
 module.exports = {
   connectDB,
   getNextTicketNumber,
@@ -344,4 +427,6 @@ module.exports = {
   deleteAutorolePanelsByChannel,
   getYoutubeState,
   setYoutubeState,
+  saveAuditLog,
+  saveTicketReview,
 };

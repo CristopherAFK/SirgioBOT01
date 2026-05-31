@@ -5,6 +5,7 @@ const {
   TextInputStyle,
   ActionRowBuilder,
 } = require('discord.js');
+const audit = require('./audit');
 const { isStaff } = require('./helpers');
 
 const STAFF_SLASH = ['say', 'saydm', 'embed', 'embeddm', 'staffcmds'];
@@ -159,6 +160,12 @@ async function handleModal(interaction) {
     }
     const text = interaction.fields.getTextInputValue('mensaje');
     await channel.send({ content: text });
+    await audit.logStaffEvent('staff.say', {
+      actorId: interaction.user.id,
+      actorTag: interaction.user.tag,
+      channelId: channel.id,
+      payload: { textPreview: text.slice(0, 200) },
+    });
     await interaction.reply({ content: `✅ Mensaje enviado en ${channel}.`, ephemeral: true });
     return true;
   }
@@ -171,6 +178,13 @@ async function handleModal(interaction) {
     }
     const text = interaction.fields.getTextInputValue('mensaje');
     await user.send({ content: text });
+    await audit.logStaffEvent('staff.saydm', {
+      actorId: interaction.user.id,
+      actorTag: interaction.user.tag,
+      targetId: user.id,
+      targetTag: user.tag,
+      payload: { textPreview: text.slice(0, 200) },
+    });
     await interaction.reply({ content: `✅ Mensaje enviado por DM a **${user.tag}**.`, ephemeral: true });
     return true;
   }
@@ -187,6 +201,12 @@ async function handleModal(interaction) {
     const image = interaction.fields.getTextInputValue('imagen') || null;
     const embed = buildCustomEmbed({ title, description, color, image });
     await channel.send({ embeds: [embed] });
+    await audit.logStaffEvent('staff.embed', {
+      actorId: interaction.user.id,
+      actorTag: interaction.user.tag,
+      channelId: channel.id,
+      payload: { title, descriptionPreview: description.slice(0, 200), image },
+    });
     await interaction.reply({ content: `✅ Embed enviado en ${channel}.`, ephemeral: true });
     return true;
   }
@@ -203,6 +223,13 @@ async function handleModal(interaction) {
     const image = interaction.fields.getTextInputValue('imagen') || null;
     const embed = buildCustomEmbed({ title, description, color, image });
     await user.send({ embeds: [embed] });
+    await audit.logStaffEvent('staff.embeddm', {
+      actorId: interaction.user.id,
+      actorTag: interaction.user.tag,
+      targetId: user.id,
+      targetTag: user.tag,
+      payload: { title, descriptionPreview: description.slice(0, 200), image },
+    });
     await interaction.reply({ content: `✅ Embed enviado por DM a **${user.tag}**.`, ephemeral: true });
     return true;
   }
@@ -223,6 +250,8 @@ async function handleSlash(interaction) {
     await interaction.reply({ content: '❌ Solo el staff puede usar este comando.', ephemeral: true });
     return true;
   }
+
+  audit.logCommandUsage(interaction);
 
   switch (interaction.commandName) {
     case 'staffcmds':

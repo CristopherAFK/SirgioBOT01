@@ -1,5 +1,6 @@
 const config = require('./config');
 const db = require('./database');
+const audit = require('./audit');
 const moderation = require('./moderation');
 const { formatDuration } = require('./helpers');
 
@@ -120,6 +121,20 @@ async function handleMessage(message) {
   }
 
   if (!violation) return false;
+
+  await audit.logStaffEvent('automod.violation', {
+    guildId: message.guild.id,
+    targetId: message.author.id,
+    targetTag: message.author.tag,
+    channelId: message.channel.id,
+    messageId: message.id,
+    source: 'automod',
+    payload: {
+      violationType: violation,
+      detail,
+      content: message.content?.slice(0, 1000) || null,
+    },
+  });
 
   await message.delete().catch(() => {});
   await processAutomodWarn(message.member, violation, detail);

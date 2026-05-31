@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const config = require('./config');
+const db = require('./database');
 const { discordTs, discordTsRel, truncate } = require('./helpers');
 
 let clientRef = null;
@@ -42,6 +43,18 @@ function describeAttachments(attachments) {
     .join('\n');
 }
 
+function serializeAttachments(attachments) {
+  if (!attachments?.size) return [];
+  return [...attachments.values()].map((a) => ({
+    id: a.id,
+    name: a.name,
+    url: a.url,
+    size: a.size,
+    contentType: a.contentType,
+    kind: getAttachmentKind(a),
+  }));
+}
+
 function buildFilesFromAttachments(attachments) {
   if (!attachments?.size) return undefined;
   return [...attachments.values()].slice(0, 10).map((a) => ({
@@ -54,6 +67,14 @@ function applyAttachmentPreview(embed, attachments) {
   if (!attachments?.size) return;
   const firstImage = [...attachments.values()].find((a) => getAttachmentKind(a) === 'image');
   if (firstImage) embed.setImage(firstImage.url);
+}
+
+async function persistLog(event) {
+  try {
+    await db.saveAuditLog(event);
+  } catch (err) {
+    console.error('Error guardando audit log:', err.message);
+  }
 }
 
 async function sendLog(channelKey, embed, options = {}) {
@@ -90,6 +111,22 @@ async function logModeration(data) {
   if (data.duration) embed.addFields({ name: '⏱️ Duración', value: data.duration, inline: true });
   if (data.proofs) embed.addFields({ name: '📎 Pruebas', value: truncate(data.proofs), inline: false });
   embed.addFields({ name: '🕐 Fecha', value: `${discordTs()} (${discordTsRel()})`, inline: false });
+
+  await persistLog({
+    category: 'moderation',
+    action: `moderation.${data.action}`,
+    actorId: data.moderatorId || null,
+    targetId: data.userId,
+    caseId: data.caseId,
+    source: data.moderatorId ? 'staff' : 'automod',
+    payload: {
+      title: data.title,
+      reason: data.reason,
+      detail: data.detail,
+      duration: data.duration,
+      proofs: data.proofs,
+    },
+  });
   await sendLog('moderation', embed);
 }
 
@@ -98,9 +135,7 @@ async function logMessageEdit(oldMsg, newMsg) {
   const contentChanged = oldMsg.content !== newMsg.content;
   const attachmentsChanged =
     (oldMsg.attachments?.size || 0) !== (newMsg.attachments?.size || 0) ||
-    [...(newMsg.attachments?.values() || [])].some(
-      (a) => !oldMsg.attachments?.has(a.id),
-    );
+    [...(newMsg.attachments?.values() || [])].some((a) => !oldMsg.attachments?.has(a.id));
   if (!contentChanged && !attachmentsChanged) return;
 
   const fields = [
@@ -123,6 +158,23 @@ async function logMessageEdit(oldMsg, newMsg) {
   const embed = baseEmbed('✏️ Mensaje editado', config.colors.auditMessage, fields);
   applyAttachmentPreview(embed, newMsg.attachments);
   const files = buildFilesFromAttachments(newMsg.attachments);
+
+  await persistLog({
+    category: 'message',
+    action: 'message.edit',
+    guildId: oldMsg.guild.id,
+    actorId: oldMsg.author.id,
+    actorTag: oldMsg.author.tag,
+    channelId: oldMsg.channel.id,
+    messageId: newMsg.id,
+    payload: {
+      url: newMsg.url,
+      contentBefore: oldMsg.content,
+      contentAfter: newMsg.content,
+      attachmentsBefore: serializeAttachments(oldMsg.attachments),
+      attachmentsAfter: serializeAttachments(newMsg.attachments),
+    },
+  });
   await sendLog('messages', embed, { files });
 }
 
@@ -143,6 +195,20 @@ async function logMessageDelete(message) {
   const embed = baseEmbed('🗑️ Mensaje eliminado', config.colors.auditMessage, fields);
   applyAttachmentPreview(embed, message.attachments);
   const files = buildFilesFromAttachments(message.attachments);
+
+  await persistLog({
+    category: 'message',
+    action: 'message.delete',
+    guildId: message.guild.id,
+    actorId: author?.id,
+    actorTag: author?.tag,
+    channelId: message.channel.id,
+    messageId: message.id,
+    payload: {
+      content: message.content,
+      attachments: serializeAttachments(message.attachments),
+    },
+  });
   await sendLog('messages', embed, { files });
 }
 
@@ -162,11 +228,34 @@ async function logMessageAttachments(message) {
   const embed = baseEmbed('📎 Archivo enviado', config.colors.auditMessage, fields);
   applyAttachmentPreview(embed, message.attachments);
   const files = buildFilesFromAttachments(message.attachments);
+
+  await persistLog({
+    category: 'message',
+    action: 'message.attachment',
+    guildId: message.guild.id,
+    actorId: message.author.id,
+    actorTag: message.author.tag,
+    channelId: message.channel.id,
+    messageId: message.id,
+    payload: {
+      url: message.url,
+      content: message.content,
+      attachments: serializeAttachments(message.attachments),
+    },
+  });
   await sendLog('messages', embed, { files });
 }
 
 async function logMemberJoin(member) {
   const ageDays = Math.floor((Date.now() - member.user.createdTimestamp) / 86400000);
+  await persistLog({
+    category: 'member',
+    action: 'member.join',
+    guildId: member.guild.id,
+    targetId: member.id,
+    targetTag: member.user.tag,
+    payload: { accountAgeDays: ageDays, memberCount: member.guild.memberCount },
+  });
   await sendLog(
     'members',
     baseEmbed('📥 Usuario ingresó', config.colors.auditMember, [
@@ -180,6 +269,14 @@ async function logMemberJoin(member) {
 
 async function logMemberLeave(member) {
   const roles = member.roles.cache.filter((r) => r.id !== member.guild.id).map((r) => r.name).join(', ') || 'Ninguno';
+  await persistLog({
+    category: 'member',
+    action: 'member.leave',
+    guildId: member.guild.id,
+    targetId: member.id,
+    targetTag: member.user.tag,
+    payload: { roles },
+  });
   await sendLog(
     'members',
     baseEmbed('📤 Usuario salió', config.colors.auditMember, [
@@ -203,6 +300,19 @@ async function logMemberUpdate(oldMember, newMember) {
   if (removed.size) changes.push(`**Roles -:** ${removed.map((r) => r.name).join(', ')}`);
   if (!changes.length) return;
 
+  await persistLog({
+    category: 'member',
+    action: 'member.update',
+    guildId: newMember.guild.id,
+    targetId: newMember.id,
+    payload: {
+      nicknameBefore: oldMember.nickname,
+      nicknameAfter: newMember.nickname,
+      rolesAdded: [...added.values()].map((r) => ({ id: r.id, name: r.name })),
+      rolesRemoved: [...removed.values()].map((r) => ({ id: r.id, name: r.name })),
+      changesText: changes.join('\n'),
+    },
+  });
   await sendLog(
     'members',
     baseEmbed('👤 Perfil actualizado', config.colors.auditMember, [
@@ -213,7 +323,12 @@ async function logMemberUpdate(oldMember, newMember) {
   );
 }
 
-async function logGuildChange(title, fields) {
+async function logGuildChange(title, fields, action, payload = {}) {
+  await persistLog({
+    category: 'guild',
+    action: action || 'guild.change',
+    payload: { title, fields, ...payload },
+  });
   await sendLog('guild', baseEmbed(title, config.colors.auditGuild, fields));
 }
 
@@ -222,43 +337,100 @@ async function logVoice(oldState, newState) {
   if (!member || member.user.bot) return;
 
   let title = null;
+  let action = null;
   const fields = [
     { name: '👤 Usuario', value: `<@${member.id}>`, inline: true },
     { name: '🕐 Fecha', value: discordTs(), inline: true },
   ];
+  const payload = { userId: member.id };
 
   if (!oldState.channelId && newState.channelId) {
     title = '🔊 Entró a voz';
+    action = 'voice.join';
     fields.unshift({ name: '📍 Canal', value: `<#${newState.channelId}>`, inline: true });
+    payload.channelId = newState.channelId;
   } else if (oldState.channelId && !newState.channelId) {
     title = '🔇 Salió de voz';
+    action = 'voice.leave';
     fields.unshift({ name: '📍 Canal', value: `<#${oldState.channelId}>`, inline: true });
+    payload.channelId = oldState.channelId;
   } else if (oldState.channelId !== newState.channelId) {
     title = '↔️ Cambió de canal de voz';
+    action = 'voice.move';
     fields.unshift(
       { name: '📍 Desde', value: `<#${oldState.channelId}>`, inline: true },
       { name: '📍 Hacia', value: `<#${newState.channelId}>`, inline: true },
     );
+    payload.fromChannelId = oldState.channelId;
+    payload.toChannelId = newState.channelId;
   } else if (oldState.serverMute !== newState.serverMute || oldState.serverDeaf !== newState.serverDeaf) {
     title = '🛡️ Moderación de voz';
+    action = 'voice.moderation';
     fields.push({
       name: 'Estado',
       value: `Mute: ${newState.serverMute ? 'Sí' : 'No'} · Deaf: ${newState.serverDeaf ? 'Sí' : 'No'}`,
       inline: false,
     });
+    payload.serverMute = newState.serverMute;
+    payload.serverDeaf = newState.serverDeaf;
   } else return;
 
+  await persistLog({
+    category: 'voice',
+    action,
+    guildId: member.guild.id,
+    targetId: member.id,
+    channelId: newState.channelId || oldState.channelId,
+    payload,
+  });
   await sendLog('voice', baseEmbed(title, config.colors.auditVoice, fields));
 }
 
 function logCommandUsage(interaction) {
+  const options = interaction.options?.data?.map((o) => ({
+    name: o.name,
+    value: o.value ?? o.user?.id ?? o.channel?.id,
+  }));
   console.log(
     `[CMD] /${interaction.commandName} por ${interaction.user.tag} (${interaction.user.id}) en #${interaction.channel?.name}`,
   );
+  persistLog({
+    category: 'command',
+    action: `command.${interaction.commandName}`,
+    guildId: interaction.guild?.id,
+    actorId: interaction.user.id,
+    actorTag: interaction.user.tag,
+    channelId: interaction.channel?.id,
+    source: 'staff',
+    payload: { commandName: interaction.commandName, options },
+  });
 }
 
 function logBotError(context, error) {
   console.error(`[BOT ERROR] ${context}:`, error?.stack || error);
+  persistLog({
+    category: 'error',
+    action: 'bot.error',
+    source: 'system',
+    payload: { context, message: error?.message, stack: error?.stack?.slice(0, 2000) },
+  });
+}
+
+async function logStaffEvent(action, data = {}) {
+  await persistLog({
+    category: 'staff',
+    action,
+    guildId: data.guildId || config.guildId,
+    actorId: data.actorId,
+    actorTag: data.actorTag,
+    targetId: data.targetId,
+    targetTag: data.targetTag,
+    channelId: data.channelId,
+    messageId: data.messageId,
+    caseId: data.caseId,
+    source: data.source || 'staff',
+    payload: data.payload || {},
+  });
 }
 
 function init(client) {
@@ -284,59 +456,99 @@ function init(client) {
 
   client.on('channelCreate', (ch) => {
     if (!ch.guild) return;
-    logGuildChange('📁 Canal creado', [
-      { name: 'Nombre', value: ch.name, inline: true },
-      { name: 'ID', value: ch.id, inline: true },
-      { name: 'Tipo', value: String(ch.type), inline: true },
-    ]);
+    logGuildChange(
+      '📁 Canal creado',
+      [
+        { name: 'Nombre', value: ch.name, inline: true },
+        { name: 'ID', value: ch.id, inline: true },
+        { name: 'Tipo', value: String(ch.type), inline: true },
+      ],
+      'guild.channel.create',
+      { channelId: ch.id, channelName: ch.name, channelType: ch.type },
+    );
   });
 
   client.on('channelDelete', (ch) => {
     if (!ch.guild) return;
-    logGuildChange('🗑️ Canal eliminado', [
-      { name: 'Nombre', value: ch.name || 'desconocido', inline: true },
-      { name: 'ID', value: ch.id, inline: true },
-    ]);
+    logGuildChange(
+      '🗑️ Canal eliminado',
+      [
+        { name: 'Nombre', value: ch.name || 'desconocido', inline: true },
+        { name: 'ID', value: ch.id, inline: true },
+      ],
+      'guild.channel.delete',
+      { channelId: ch.id, channelName: ch.name },
+    );
   });
 
   client.on('channelUpdate', (oldCh, newCh) => {
     if (!newCh.guild || oldCh.name === newCh.name) return;
-    logGuildChange('✏️ Canal renombrado', [
-      { name: 'Antes', value: oldCh.name, inline: true },
-      { name: 'Después', value: newCh.name, inline: true },
-      { name: 'ID', value: newCh.id, inline: true },
-    ]);
+    logGuildChange(
+      '✏️ Canal renombrado',
+      [
+        { name: 'Antes', value: oldCh.name, inline: true },
+        { name: 'Después', value: newCh.name, inline: true },
+        { name: 'ID', value: newCh.id, inline: true },
+      ],
+      'guild.channel.rename',
+      { channelId: newCh.id, nameBefore: oldCh.name, nameAfter: newCh.name },
+    );
   });
 
   client.on('roleCreate', (role) => {
-    logGuildChange('🎭 Rol creado', [
-      { name: 'Nombre', value: role.name, inline: true },
-      { name: 'ID', value: role.id, inline: true },
-    ]);
+    logGuildChange(
+      '🎭 Rol creado',
+      [
+        { name: 'Nombre', value: role.name, inline: true },
+        { name: 'ID', value: role.id, inline: true },
+      ],
+      'guild.role.create',
+      { roleId: role.id, roleName: role.name },
+    );
   });
 
   client.on('roleDelete', (role) => {
-    logGuildChange('🗑️ Rol eliminado', [
-      { name: 'Nombre', value: role.name, inline: true },
-      { name: 'ID', value: role.id, inline: true },
-    ]);
+    logGuildChange(
+      '🗑️ Rol eliminado',
+      [
+        { name: 'Nombre', value: role.name, inline: true },
+        { name: 'ID', value: role.id, inline: true },
+      ],
+      'guild.role.delete',
+      { roleId: role.id, roleName: role.name },
+    );
   });
 
   client.on('roleUpdate', (oldRole, newRole) => {
     const permsChanged = oldRole.permissions.bitfield !== newRole.permissions.bitfield;
-    logGuildChange('✏️ Rol actualizado', [
-      { name: 'Rol', value: newRole.name, inline: true },
-      { name: 'Permisos', value: permsChanged ? 'Modificados ⚠️' : 'Sin cambio', inline: true },
-    ]);
+    logGuildChange(
+      '✏️ Rol actualizado',
+      [
+        { name: 'Rol', value: newRole.name, inline: true },
+        { name: 'Permisos', value: permsChanged ? 'Modificados ⚠️' : 'Sin cambio', inline: true },
+      ],
+      'guild.role.update',
+      { roleId: newRole.id, roleName: newRole.name, permsChanged },
+    );
   });
 
   client.on('inviteCreate', (invite) => {
-    logGuildChange('🔗 Invitación creada', [
-      { name: 'Código', value: invite.code, inline: true },
-      { name: 'Por', value: invite.inviter ? `<@${invite.inviter.id}>` : 'Desconocido', inline: true },
-      { name: 'Usos máx.', value: invite.maxUses ? String(invite.maxUses) : '∞', inline: true },
-      { name: 'Expira', value: invite.expiresAt ? discordTs(invite.expiresAt) : 'Nunca', inline: false },
-    ]);
+    logGuildChange(
+      '🔗 Invitación creada',
+      [
+        { name: 'Código', value: invite.code, inline: true },
+        { name: 'Por', value: invite.inviter ? `<@${invite.inviter.id}>` : 'Desconocido', inline: true },
+        { name: 'Usos máx.', value: invite.maxUses ? String(invite.maxUses) : '∞', inline: true },
+        { name: 'Expira', value: invite.expiresAt ? discordTs(invite.expiresAt) : 'Nunca', inline: false },
+      ],
+      'guild.invite.create',
+      {
+        code: invite.code,
+        inviterId: invite.inviter?.id,
+        maxUses: invite.maxUses,
+        expiresAt: invite.expiresAt?.getTime(),
+      },
+    );
   });
 
   client.on('voiceStateUpdate', logVoice);
@@ -348,4 +560,5 @@ module.exports = {
   logMessageDelete,
   logCommandUsage,
   logBotError,
+  logStaffEvent,
 };

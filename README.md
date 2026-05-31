@@ -158,6 +158,55 @@ Al ejecutar `!autoroles` en un canal, el bot publica **8 mensajes** (4 URLs de b
 
 Los usuarios reaccionan con el emoji para obtener el rol y quitan la reacción para perderlo.
 
+## MongoDB — datos para bots externos
+
+SirgioBOT persiste todos los eventos relevantes en MongoDB. Otro bot (por ejemplo, métricas de rendimiento del staff) puede conectarse con la misma `MONGODB_URI` usando un usuario de **solo lectura** en Atlas.
+
+### Colecciones principales
+
+| Colección | Uso para rendimiento del staff |
+|-----------|--------------------------------|
+| `auditlogs` | Timeline unificada: auditoría, comandos, tickets, sugerencias, automod, acciones de staff |
+| `modcases` | Sanciones: warn, mute, ban, unmute, unban (`source`: `staff` o `automod`) |
+| `ticketreviews` | Valoraciones completadas (estrellas, opinión, quién cerró/atendió) |
+| `pendingreviews` | Valoraciones pendientes (ticket cerrado, usuario aún no calificó) |
+| `tickets` | Tickets abiertos (incluye `attendedBy` si alguien pulsó «Atender») |
+| `suggestions` | Sugerencias con estado, votos y respuesta del staff (`modId`, `modTag`) |
+| `userprofiles` | Warns activos, contadores automod, mute en curso |
+| `botsettings` | Contadores globales (tickets, casos) |
+
+### Campos útiles en `auditlogs`
+
+- `category`: `message`, `member`, `guild`, `voice`, `moderation`, `command`, `staff`, `error`
+- `action`: por ejemplo `ticket.close`, `ticket.attend`, `ticket.review`, `suggestion.review`, `automod.violation`, `moderation.warn`, `command.sancion`
+- `actorId` / `actorTag`: quien ejecutó la acción (staff o usuario)
+- `targetId`: usuario afectado
+- `caseId`: enlace con `modcases` cuando aplica
+- `source`: `staff`, `automod`, `user`, `system`
+- `payload`: detalles (razón, rating, texto, etc.)
+- `at`: timestamp (`Date.now()`)
+
+### Consultas de ejemplo (otro bot)
+
+```js
+// Sanciones de un moderador este mes
+db.modcases.find({
+  moderatorId: 'ID_STAFF',
+  createdAt: { $gte: Date.now() - 30 * 86400000 },
+});
+
+// Tickets cerrados y valorados por staff
+db.ticketreviews.find({ closedBy: 'ID_STAFF' }).sort({ ratedAt: -1 });
+
+// Actividad reciente de un miembro del staff
+db.auditlogs.find({ actorId: 'ID_STAFF' }).sort({ at: -1 }).limit(100);
+
+// Solo automod
+db.auditlogs.find({ source: 'automod' }).sort({ at: -1 });
+```
+
+Los embeds en Discord siguen publicándose en los canales de auditoría; MongoDB es la fuente para análisis y el bot de rendimiento.
+
 ## Estructura del proyecto
 
 ```
